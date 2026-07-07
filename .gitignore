@@ -1,0 +1,6 @@
+mnt_system/
+output/
+nuevo_super.img
+
+__pycache__/
+*.pyc
