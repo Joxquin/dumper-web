@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Android Super Image Dumper & Repacker</title>
+  <link rel="stylesheet" href="css/material3.css">
+</head>
+<body>
+
+  <div id="app-shell">
+    <!-- Navigation Drawer -->
+    <nav class="navigation-drawer">
+      <div class="drawer-header">
+        <h1>
+          <svg style="width:24px;height:24px;fill:currentColor" viewBox="0 0 24 24">
+            <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z" />
+          </svg>
+          Dumper-Web
+        </h1>
+        <p>Extractor de particiones lógicas</p>
+      </div>
+      
+      <ul class="navigation-list">
+        <li class="navigation-item active" onclick="switchTab('diag')">
+          <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24">
+            <path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 22,12A8,8 0 0,0 12,4M12,6A1.5,1.5 0 0,1 13.5,7.5A1.5,1.5 0 0,1 12,9A1.5,1.5 0 0,1 10.5,7.5A1.5,1.5 0 0,1 12,6M11,10H13V18H11V10Z" />
+          </svg>
+          Diagnóstico y Estado
+        </li>
+        <li class="navigation-item" onclick="switchTab('unpack')">
+          <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24">
+            <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+          </svg>
+          1. Desempaquetar
+        </li>
+        <li class="navigation-item" onclick="switchTab('mount')">
+          <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24">
+            <path d="M19,20H5V20A2,2 0 0,1 3,18V6A2,2 0 0,1 5,4H19A2,2 0 0,1 21,6V18A2,2 0 0,1 19,20M5,6V18H19V6H5M7,8H17V10H7V8M7,12H17V14H7V12M7,16H13V18H7V16Z" />
+          </svg>
+          2. Particiones y Montaje
+        </li>
+        <li class="navigation-item" onclick="switchTab('pack')">
+          <svg style="width:20px;height:20px;fill:currentColor" viewBox="0 0 24 24">
+            <path d="M12,2C17.52,2 22,6.48 22,12C22,17.52 17.52,22 12,22C6.48,22 2,17.52 2,12C2,6.48 6.48,2 12,2M12,4C7.58,4 4,7.58 4,12C4,16.42 7.58,20 12,20C16.42,20 20,16.42 20,12C20,7.58 16.42,4 12,4M12,6V11H17V13H12V18H10V13H5V11H10V6H12Z" />
+          </svg>
+          3. Empaquetar Repack
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Main Content Panel -->
+    <main class="main-content">
+      
+      <!-- Diagnostic Tab -->
+      <section id="tab-diag" class="tab-content active">
+        <div class="info-banner">
+          <div class="info-banner-icon">ℹ</div>
+          <div class="info-banner-content">
+            <div class="info-banner-title">Información de Privilegios de Montaje</div>
+            <div class="info-banner-text">
+              Para poder montar las imágenes `.img` en modo Lectura-Escritura (loop mount), el servidor web debe correr con permisos elevados. Inicia el servidor mediante: <strong>sudo python3 server.py</strong>.
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title">
+              Herramientas Requeridas
+            </div>
+            <div class="diag-list" id="tools-list">
+              <div class="diag-item">Cargando dependencias...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">Particiones Montadas (Loop devices)</div>
+            <div id="mounts-status-container" style="display:flex; flex-direction:column; gap:12px;">
+              <p style="color:var(--md-sys-color-on-surface-variant)">No hay particiones montadas bajo /tmp/dumper_web o mnt_system.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Unpack Tab -->
+      <section id="tab-unpack" class="tab-content">
+        <div class="card">
+          <div class="card-title">Desempaquetar super.img</div>
+          
+          <div class="input-group">
+            <label class="input-label" for="unpack-super-img">Ruta absoluta del archivo super.img</label>
+            <input type="text" id="unpack-super-img" class="text-field" placeholder="/ruta/absoluta/a/super.img" value="/home/joxquin/dumper-web/super.img">
+          </div>
+
+          <div class="input-group">
+            <label class="input-label" for="unpack-output-dir">Ruta absoluta de la carpeta de salida (Output)</label>
+            <input type="text" id="unpack-output-dir" class="text-field" placeholder="/ruta/absoluta/a/carpeta_salida" value="/home/joxquin/dumper-web/output">
+          </div>
+
+          <div style="display:flex; justify-content: flex-end;">
+            <button id="btn-start-unpack" class="btn btn-primary" onclick="startUnpack()">
+              Desempaquetar
+            </button>
+          </div>
+        </div>
+
+        <!-- Terminal Output -->
+        <div class="terminal-card" id="terminal-unpack" style="display:none;">
+          <div class="terminal-header">
+            <div class="terminal-title">
+              <span id="unpack-status-indicator" class="spinner" style="width:16px; height:16px; border-width:2px; display:inline-block;"></span>
+              Salida del Proceso (lpunpack)
+            </div>
+            <div class="terminal-actions">
+              <span class="badge" id="unpack-badge" style="background-color: var(--md-sys-color-primary-container); color: var(--md-sys-color-on-primary-container)">En progreso</span>
+            </div>
+          </div>
+          <div class="terminal-body" id="unpack-console">Iniciando...</div>
+        </div>
+      </section>
+
+      <!-- Partitions / Mount Tab -->
+      <section id="tab-mount" class="tab-content">
+        <div class="card">
+          <div class="card-title">Gestión de Particiones y Puntos de Montaje</div>
+          <p style="color:var(--md-sys-color-on-surface-variant)">
+            Introduce la carpeta de salida donde desempaquetaste las particiones, e indica la carpeta destino de montaje. Podrás montar y desmontar de forma interactiva.
+          </p>
+
+          <div class="grid-2">
+            <div class="input-group">
+              <label class="input-label" for="mount-output-dir">Carpeta de particiones extraídas (Output)</label>
+              <input type="text" id="mount-output-dir" class="text-field" onchange="loadPartitions()" placeholder="/home/joxquin/dumper-web/output" value="/home/joxquin/dumper-web/output">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="mount-dir">Carpeta de montaje (mnt_system)</label>
+              <input type="text" id="mount-dir" class="text-field" placeholder="/home/joxquin/dumper-web/mnt_system" value="/home/joxquin/dumper-web/mnt_system">
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content: space-between; align-items:center;">
+            <button class="btn btn-outlined" onclick="loadPartitions()">Buscar Particiones</button>
+            <div style="display:flex; gap:12px;">
+              <button id="btn-unmount-all" class="btn btn-error" onclick="triggerMountAction('unmount')">Desmontar Todo</button>
+              <button id="btn-mount-all" class="btn btn-primary" onclick="triggerMountAction('mount')">Montar Todo</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="partitions-card">
+          <div class="card-title">Particiones Detectadas</div>
+          <div class="partitions-list" id="partitions-list-container">
+            <p style="color:var(--md-sys-color-on-surface-variant)">Haz clic en "Buscar Particiones" para analizar los metadatos de la carpeta de salida.</p>
+          </div>
+        </div>
+
+        <!-- Terminal Output Montaje -->
+        <div class="terminal-card" id="terminal-mount" style="display:none;">
+          <div class="terminal-header">
+            <div class="terminal-title">
+              <span id="mount-status-indicator" class="spinner" style="width:16px; height:16px; border-width:2px; display:inline-block;"></span>
+              Registro de Montaje / Desmontaje
+            </div>
+            <div class="terminal-actions">
+              <span class="badge" id="mount-badge" style="background-color: var(--md-sys-color-secondary-container);">Cargando</span>
+            </div>
+          </div>
+          <div class="terminal-body" id="mount-console"></div>
+        </div>
+      </section>
+
+      <!-- Repack Tab -->
+      <section id="tab-pack" class="tab-content">
+        <div class="card">
+          <div class="card-title">Empaquetar nuevo_super.img</div>
+          
+          <div class="grid-2">
+            <div class="input-group">
+              <label class="input-label" for="pack-output-dir">Carpeta de origen (con particiones modificadas)</label>
+              <input type="text" id="pack-output-dir" class="text-field" placeholder="/home/joxquin/dumper-web/output" value="/home/joxquin/dumper-web/output">
+            </div>
+            <div class="input-group">
+              <label class="input-label" for="pack-mount-dir">Carpeta de montaje (se desmontará automáticamente)</label>
+              <input type="text" id="pack-mount-dir" class="text-field" placeholder="/home/joxquin/dumper-web/mnt_system" value="/home/joxquin/dumper-web/mnt_system">
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label" for="pack-new-super">Ruta del nuevo archivo super.img resultante</label>
+            <input type="text" id="pack-new-super" class="text-field" placeholder="/home/joxquin/dumper-web/nuevo_super.img" value="/home/joxquin/dumper-web/nuevo_super.img">
+          </div>
+
+          <div class="switch-container" onclick="toggleCheckbox('pack-sparse')">
+            <div class="switch-label-container">
+              <span class="switch-title">Exportar como Sparse Image (Fastboot)</span>
+              <span class="switch-desc">Si está activo, convertirá el super.img a formato sparse listo para flashear por fastboot.</span>
+            </div>
+            <input type="checkbox" id="pack-sparse">
+            <div class="switch-control"></div>
+          </div>
+
+          <div style="display:flex; justify-content: flex-end;">
+            <button id="btn-start-pack" class="btn btn-primary" onclick="startPack()">
+              Generar nuevo_super.img
+            </button>
+          </div>
+        </div>
+
+        <!-- Terminal Output Repack -->
+        <div class="terminal-card" id="terminal-pack-status" style="display:none;">
+          <div class="terminal-header">
+            <div class="terminal-title">
+              <span id="pack-status-indicator" class="spinner" style="width:16px; height:16px; border-width:2px; display:inline-block;"></span>
+              Consola de Empaquetado (lpmake)
+            </div>
+            <div class="terminal-actions">
+              <span class="badge" id="pack-badge" style="background-color: var(--md-sys-color-primary-container);">En progreso</span>
+            </div>
+          </div>
+          <div class="terminal-body" id="pack-console">Iniciando...</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Snackbar / Toast Notification -->
+  <div id="snackbar">
+    <span id="snackbar-msg">Operación completada con éxito</span>
+    <button class="btn btn-tonal" style="height:32px; padding: 0 12px; font-size:12px; margin-left: 10px;" onclick="closeSnackbar()">OK</button>
+  </div>
+
+  <script>
+    let activeJob = null;
+    let jobPoller = null;
+
+    // Switch Tabs
+    function switchTab(tabName) {
+      document.querySelectorAll('.navigation-item').forEach(item => item.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      
+      const tabButton = event.currentTarget;
+      if (tabButton && tabButton.classList) {
+        tabButton.classList.add('active');
+      } else {
+        // Encontrar el botón correspondiente por índice o texto si fue llamado sin evento
+        const items = document.querySelectorAll('.navigation-item');
+        if (tabName === 'diag') items[0].classList.add('active');
+        if (tabName === 'unpack') items[1].classList.add('active');
+        if (tabName === 'mount') items[2].classList.add('active');
+        if (tabName === 'pack') items[3].classList.add('active');
+      }
+
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      
+      // Si entramos a la pestaña de montaje, refrescamos particiones
+      if (tabName === 'mount') {
+        loadPartitions();
+      }
+    }
+
+    // Toggle custom MD3 switch
+    function toggleCheckbox(id) {
+      const checkbox = document.getElementById(id);
+      checkbox.checked = !checkbox.checked;
+    }
+
+    // Show Snackbar
+    function showSnackbar(msg, isError = false) {
+      const snack = document.getElementById("snackbar");
+      const snackMsg = document.getElementById("snackbar-msg");
+      snackMsg.innerText = msg;
+      
+      if (isError) {
+        snack.style.backgroundColor = "var(--md-sys-color-error-container)";
+        snack.style.color = "var(--md-sys-color-on-error-container)";
+      } else {
+        snack.style.backgroundColor = "var(--md-sys-color-surface-container-highest)";
+        snack.style.color = "var(--md-sys-color-on-surface)";
+      }
+      
+      snack.className = "show";
+      setTimeout(function(){ snack.className = snack.className.replace("show", ""); }, 3000);
+    }
+    
+    function closeSnackbar() {
+      document.getElementById("snackbar").className = "";
+    }
+
+    // Poll status.py
+    function fetchStatus() {
+      fetch('/cgi-bin/status.py')
+        .then(response => response.json())
+        .then(data => {
+          updateDiagnostics(data.diagnostics);
+          updateMountedLoops(data.mounted_partitions);
+          
+          if (data.status === 'running') {
+            activeJob = data.job;
+            updateJobUI(data);
+          } else if (activeJob) {
+            // El trabajo terminó
+            updateJobUI(data);
+            showSnackbar(data.status === 'success' ? `¡Proceso de ${activeJob} finalizado con éxito!` : `Error en el proceso de ${activeJob}`, data.status !== 'success');
+            activeJob = null;
+            enableAllButtons();
+            
+            // Recargar particiones si terminó dumper o mount/unmount
+            loadPartitions();
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching status:", err);
+        });
+    }
+
+    // Actualizar elementos de diagnóstico
+    function updateDiagnostics(diag) {
+      if (!diag) return;
+      
+      const container = document.getElementById("tools-list");
+      container.innerHTML = "";
+      
+      if (diag.error) {
+        container.innerHTML = `<div class="diag-item" style="color:var(--md-sys-color-error)">${diag.error}</div>`;
+        return;
+      }
+
+      Object.keys(diag).forEach(toolName => {
+        const tool = diag[toolName];
+        const item = document.createElement("div");
+        item.className = "diag-item";
+        
+        const nameDiv = document.createElement("div");
+        nameDiv.className = "diag-name";
+        nameDiv.innerHTML = `
+          <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24">
+            <path d="M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L6.04,7.5L12,10.85L17.96,7.5L12,4.15M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V9.21L13,12.58V19.29L19,15.91Z" />
+          </svg>
+          ${toolName}
+        `;
+        
+        const badge = document.createElement("span");
+        badge.className = `badge ${tool.installed ? 'badge-success' : 'badge-warning'}`;
+        badge.innerText = tool.installed ? 'Instalado' : 'Falta';
+        
+        item.appendChild(nameDiv);
+        item.appendChild(badge);
+        container.appendChild(item);
+      });
+    }
+
+    // Actualizar el estado de dispositivos de loop
+    function updateMountedLoops(mounts) {
+      const container = document.getElementById("mounts-status-container");
+      if (!mounts || mounts.length === 0) {
+        container.innerHTML = '<p style="color:var(--md-sys-color-on-surface-variant)">No hay particiones loop montadas.</p>';
+        return;
+      }
+      
+      container.innerHTML = "";
+      mounts.forEach(m => {
+        const item = document.createElement("div");
+        item.className = "diag-item";
+        item.style.flexDirection = "column";
+        item.style.alignItems = "flex-start";
+        item.style.gap = "4px";
+        
+        item.innerHTML = `
+          <div style="font-weight:600; color:var(--md-sys-color-primary)">${m.mount_point}</div>
+          <div style="font-size:12px; color:var(--md-sys-color-on-surface-variant)">Dispositivo: ${m.device} (${m.fs_type})</div>
+          <div style="font-size:11px; color:rgba(230,225,229,0.5)">Permisos: ${m.options}</div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    // Deshabilitar botones de acción durante el proceso
+    function disableAllButtons() {
+      document.getElementById("btn-start-unpack").disabled = true;
+      document.getElementById("btn-mount-all").disabled = true;
+      document.getElementById("btn-unmount-all").disabled = true;
+      document.getElementById("btn-start-pack").disabled = true;
+    }
+
+    function enableAllButtons() {
+      document.getElementById("btn-start-unpack").disabled = false;
+      document.getElementById("btn-mount-all").disabled = false;
+      document.getElementById("btn-unmount-all").disabled = false;
+      document.getElementById("btn-start-pack").disabled = false;
+    }
+
+    // Actualizar interfaz según el trabajo en curso
+    function updateJobUI(jobData) {
+      let consoleId, termCardId, badgeId, spinnerId;
+      
+      if (jobData.job === 'dumper') {
+        consoleId = 'unpack-console';
+        termCardId = 'terminal-unpack';
+        badgeId = 'unpack-badge';
+        spinnerId = 'unpack-status-indicator';
+      } else if (jobData.job === 'mount' || jobData.job === 'unmount') {
+        consoleId = 'mount-console';
+        termCardId = 'terminal-mount';
+        badgeId = 'mount-badge';
+        spinnerId = 'mount-status-indicator';
+      } else if (jobData.job === 'compress') {
+        consoleId = 'pack-console';
+        termCardId = 'terminal-pack-status';
+        badgeId = 'pack-badge';
+        spinnerId = 'pack-status-indicator';
+      } else {
+        return; // Sin trabajo o desconocido
+      }
+      
+      // Mostrar la consola correspondiente
+      document.getElementById(termCardId).style.display = 'flex';
+      
+      // Actualizar consola
+      const consoleElem = document.getElementById(consoleId);
+      consoleElem.innerText = jobData.log || "Iniciando logs...";
+      consoleElem.scrollTop = consoleElem.scrollHeight; // Auto scroll
+      
+      // Actualizar badge y spinner
+      const badge = document.getElementById(badgeId);
+      const spinner = document.getElementById(spinnerId);
+      
+      if (jobData.status === 'running') {
+        disableAllButtons();
+        badge.innerText = "En progreso";
+        badge.style.backgroundColor = "var(--md-sys-color-primary-container)";
+        badge.style.color = "var(--md-sys-color-on-primary-container)";
+        spinner.style.display = 'inline-block';
+      } else if (jobData.status === 'success') {
+        badge.innerText = "Completado";
+        badge.style.backgroundColor = "rgba(143, 206, 0, 0.2)";
+        badge.style.color = "#c2ff5c";
+        spinner.style.display = 'none';
+      } else if (jobData.status === 'failed') {
+        badge.innerText = "Fallido";
+        badge.style.backgroundColor = "var(--md-sys-color-error-container)";
+        badge.style.color = "var(--md-sys-color-on-error-container)";
+        spinner.style.display = 'none';
+      }
+    }
+
+    // Iniciar desempaquetado
+    function startUnpack() {
+      const superImg = document.getElementById("unpack-super-img").value;
+      const outputDir = document.getElementById("unpack-output-dir").value;
+      
+      if (!superImg || !outputDir) {
+        showSnackbar("Por favor, rellena todos los campos.", true);
+        return;
+      }
+      
+      disableAllButtons();
+      document.getElementById("terminal-unpack").style.display = 'flex';
+      document.getElementById("unpack-console").innerText = "Iniciando desempaquetado...";
+      
+      const formData = new URLSearchParams();
+      formData.append('super_img', superImg);
+      formData.append('output_dir', outputDir);
+      
+      fetch('/cgi-bin/dumper_api.py', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          showSnackbar("Extractor iniciado. Siguiendo salida...");
+          activeJob = 'dumper';
+        } else {
+          showSnackbar(data.message, true);
+          enableAllButtons();
+        }
+      })
+      .catch(err => {
+        showSnackbar("Error de red al iniciar extractor.", true);
+        enableAllButtons();
+      });
+    }
+
+    // Cargar y mostrar lista de particiones
+    function loadPartitions() {
+      const outputDir = document.getElementById("mount-output-dir").value;
+      const container = document.getElementById("partitions-list-container");
+      
+      if (!outputDir) {
+        container.innerHTML = '<p style="color:var(--md-sys-color-on-surface-variant)">Especifica la carpeta de salida.</p>';
+        return;
+      }
+      
+      // Intentamos leer metadata.json de la carpeta de salida
+      // Para ello, la API status.py también nos devuelve el estado de montaje actual.
+      // Pero para leer metadata.json directamente, podemos usar fetch si está en la carpeta web,
+      // o consultar si status.py lo hace. Como metadata.json está dentro de outputDir que puede estar
+      // fuera del directorio del servidor, crearemos un endpoint o usaremos status.py.
+      // Espera, leamos metadata.json. ¿Cómo lo lee el frontend?
+      // Podemos leerlo consultando status.py o creando un endpoint específico,
+      // o haciendo un fetch simple si el servidor lo expone. Como output_dir no está dentro del directorio
+      // raíz del servidor web obligatoriamente, el frontend no puede hacer un fetch local directo.
+      // ¡Crearemos un endpoint cgi para leer el archivo metadata.json!
+      // Es una solución excelente. De momento, haremos un fetch a '/cgi-bin/read_metadata.py?output_dir=' + encodeURIComponent(outputDir)
+      
+      fetch(`/cgi-bin/read_metadata.py?output_dir=${encodeURIComponent(outputDir)}`)
+        .then(res => {
+          if (!res.ok) throw new Error("No se pudo leer metadatos");
+          return res.json();
+        })
+        .then(data => {
+          if (data.error) {
+            container.innerHTML = `<p style="color:var(--md-sys-color-error)">${data.error}</p>`;
+            return;
+          }
+          
+          container.innerHTML = "";
+          
+          if (!data.partitions || data.partitions.length === 0) {
+            container.innerHTML = '<p style="color:var(--md-sys-color-on-surface-variant)">No se encontraron particiones lógicas.</p>';
+            return;
+          }
+          
+          const mountDir = document.getElementById("mount-dir").value;
+
+          data.partitions.forEach(part => {
+            const row = document.createElement("div");
+            row.className = "partition-row";
+            
+            const sizeMB = (parseInt(part.size) / (1024 * 1024)).toFixed(2) + " MB";
+            
+            const info = document.createElement("div");
+            info.className = "partition-info";
+            info.innerHTML = `
+              <span class="partition-name">${part.name}</span>
+              <span class="partition-group">Grupo: ${part.group_name}</span>
+            `;
+            
+            const size = document.createElement("span");
+            size.className = "partition-size";
+            size.innerText = sizeMB;
+            
+            // Verificar si la partición está actualmente montada
+            const isMounted = data.mounted_list && data.mounted_list.some(m => m.endsWith(`/${part.name}`));
+            
+            const badge = document.createElement("span");
+            badge.className = `status-badge ${isMounted ? 'status-mounted' : 'status-unmounted'}`;
+            badge.innerText = isMounted ? 'Montada' : 'Sin montar';
+            
+            // Botones de acción individual
+            const actions = document.createElement("div");
+            actions.style.display = "flex";
+            actions.style.alignItems = "center";
+            actions.style.gap = "12px";
+            
+            const btn = document.createElement("button");
+            btn.className = "btn";
+            btn.style.height = "32px";
+            btn.style.padding = "0 12px";
+            btn.style.fontSize = "12px";
+            btn.style.borderRadius = "8px";
+            
+            if (isMounted) {
+              btn.className += " btn-error";
+              btn.innerText = "Desmontar";
+              btn.onclick = () => triggerMountAction('unmount', part.name);
+              
+              const pathSpan = document.createElement("span");
+              pathSpan.style.fontSize = "12px";
+              pathSpan.style.color = "var(--md-sys-color-primary)";
+              pathSpan.innerText = `Ruta: ${mountDir}/${part.name}`;
+              
+              actions.appendChild(btn);
+              actions.appendChild(pathSpan);
+            } else {
+              btn.className += " btn-tonal";
+              btn.innerText = "Montar";
+              btn.onclick = () => triggerMountAction('mount', part.name);
+              
+              actions.appendChild(btn);
+            }
+            
+            row.appendChild(info);
+            row.appendChild(size);
+            row.appendChild(badge);
+            row.appendChild(actions);
+            container.appendChild(row);
+          });
+        })
+        .catch(err => {
+          container.innerHTML = `<p style="color:var(--md-sys-color-on-surface-variant)">No hay información disponible. Realiza la descompresión primero.</p>`;
+        });
+    }
+
+    // Montar o desmontar todo o una partición específica
+    function triggerMountAction(action, partitionName = null) {
+      const outputDir = document.getElementById("mount-output-dir").value;
+      const mountDir = document.getElementById("mount-dir").value;
+      
+      if (!mountDir || (action === 'mount' && !outputDir)) {
+        showSnackbar("Completa todos los directorios.", true);
+        return;
+      }
+      
+      disableAllButtons();
+      document.getElementById("terminal-mount").style.display = 'flex';
+      const targetText = partitionName ? `partición '${partitionName}'` : 'todas las particiones';
+      document.getElementById("mount-console").innerText = `Iniciando operación de ${action} para ${targetText}...`;
+      
+      const formData = new URLSearchParams();
+      formData.append('action', action);
+      formData.append('mount_dir', mountDir);
+      if (action === 'mount') {
+        formData.append('output_dir', outputDir);
+      }
+      if (partitionName) {
+        formData.append('partition', partitionName);
+      }
+      
+      fetch('/cgi-bin/mount_api.py', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          showSnackbar(`Proceso de ${action} para ${partitionName || 'todo'} iniciado.`);
+          activeJob = action;
+        } else {
+          showSnackbar(data.message, true);
+          enableAllButtons();
+        }
+      })
+      .catch(err => {
+        showSnackbar("Error de red al procesar montaje.", true);
+        enableAllButtons();
+      });
+    }
+
+    // Iniciar Repack
+    function startPack() {
+      const outputDir = document.getElementById("pack-output-dir").value;
+      const mountDir = document.getElementById("pack-mount-dir").value;
+      const newSuper = document.getElementById("pack-new-super").value;
+      const isSparse = document.getElementById("pack-sparse").checked ? 'true' : 'false';
+      
+      if (!outputDir || !mountDir || !newSuper) {
+        showSnackbar("Completa todos los campos.", true);
+        return;
+      }
+      
+      disableAllButtons();
+      document.getElementById("terminal-pack-status").style.display = 'flex';
+      document.getElementById("pack-console").innerText = "Iniciando empaquetado...";
+      
+      const formData = new URLSearchParams();
+      formData.append('output_dir', outputDir);
+      formData.append('mount_dir', mountDir);
+      formData.append('new_super', newSuper);
+      formData.append('is_sparse', isSparse);
+      
+      fetch('/cgi-bin/compress_api.py', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          showSnackbar("Empaquetador iniciado. Reconstruyendo imagen...");
+          activeJob = 'compress';
+        } else {
+          showSnackbar(data.message, true);
+          enableAllButtons();
+        }
+      })
+      .catch(err => {
+        showSnackbar("Error de red al empaquetar.", true);
+        enableAllButtons();
+      });
+    }
+
+    // Al cargar la página
+    window.onload = function() {
+      // Iniciar polling
+      fetchStatus();
+      jobPoller = setInterval(fetchStatus, 1000);
+      
+      // Sincronizar campos de texto al escribir
+      document.getElementById("unpack-output-dir").addEventListener("input", function() {
+        document.getElementById("mount-output-dir").value = this.value;
+        document.getElementById("pack-output-dir").value = this.value;
+      });
+      document.getElementById("mount-dir").addEventListener("input", function() {
+        document.getElementById("pack-mount-dir").value = this.value;
+      });
+    }
+  </script>
+</body>
+</html>
