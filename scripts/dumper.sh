@@ -24,9 +24,13 @@ echo "Destino: $OUTPUT_DIR"
 
 # Detectar si es una imagen sparse
 # Sparse magic en hex: 3aff26ed
-MAGIC=$(od -An -tx4 -N4 "$SUPER_IMG" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+MAGIC=$(od -An -tx1 -N4 "$SUPER_IMG" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
 
 SUPER_RAW="$OUTPUT_DIR/super.raw"
+
+# Eliminar el archivo de salida o enlace simbólico anterior para evitar
+# que simg2img escriba en el origen si super.raw era un enlace simbólico a SUPER_IMG.
+rm -f "$SUPER_RAW"
 
 if [ "$MAGIC" = "3aff26ed" ]; then
     echo "[1/4] Detectada imagen SPARSE. Convirtiendo a RAW con simg2img..."

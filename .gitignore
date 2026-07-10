@@ -1,6 +1,7 @@
 mnt_system/
 output/
 nuevo_super.img
+super.img
 
 __pycache__/
 *.pyc

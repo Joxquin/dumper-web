@@ -84,10 +84,14 @@ def main():
             # Alinear tamaño a sectores de 512 bytes
             if size % 512 != 0:
                 size = ((size // 512) + 1) * 512
-            cmd.append(f'--partition={name}:{attrs}:{size}:{group_name}')
-            cmd.append(f'--image={name}={img_path}')
+            
+            if size > 0:
+                cmd.append(f'--partition={name}:{attrs}:{size}:{group_name}')
+                cmd.append(f'--image={name}={img_path}')
+            else:
+                cmd.append(f'--partition={name}:{attrs}:0:{group_name}')
         else:
-            size = part['size']
+            size = part.get('size', '0')
             cmd.append(f'--partition={name}:{attrs}:{size}:{group_name}')
             
     print("Ejecutando comando lpmake:")

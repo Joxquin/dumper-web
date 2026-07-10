@@ -526,6 +526,16 @@ input[type="checkbox"]:checked + .switch-control::after {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+.status-extracted {
+  background-color: rgba(12, 180, 255, 0.15);
+  color: #7cd4ff;
+}
+
+.status-not-extracted {
+  background-color: rgba(230, 225, 229, 0.05);
+  color: rgba(230, 225, 229, 0.4);
+}
+
 /* Spinner */
 .spinner {
   width: 24px;

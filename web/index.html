@@ -66,8 +66,9 @@
 
         <div class="grid-2">
           <div class="card">
-            <div class="card-title">
-              Herramientas Requeridas
+            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Herramientas Requeridas</span>
+              <button id="btn-install-erofs" class="btn btn-tonal" style="display:none; height:32px; padding:0 12px; font-size:12px;" onclick="installErofsTools()">Instalar EROFS</button>
             </div>
             <div class="diag-list" id="tools-list">
               <div class="diag-item">Cargando dependencias...</div>
@@ -191,14 +192,14 @@
             <input type="text" id="pack-new-super" class="text-field" placeholder="/home/joxquin/dumper-web/nuevo_super.img" value="/home/joxquin/dumper-web/nuevo_super.img">
           </div>
 
-          <div class="switch-container" onclick="toggleCheckbox('pack-sparse')">
-            <div class="switch-label-container">
+          <label class="switch-container" for="pack-sparse">
+            <span class="switch-label-container">
               <span class="switch-title">Exportar como Sparse Image (Fastboot)</span>
               <span class="switch-desc">Si está activo, convertirá el super.img a formato sparse listo para flashear por fastboot.</span>
-            </div>
+            </span>
             <input type="checkbox" id="pack-sparse">
-            <div class="switch-control"></div>
-          </div>
+            <span class="switch-control"></span>
+          </label>
 
           <div style="display:flex; justify-content: flex-end;">
             <button id="btn-start-pack" class="btn btn-primary" onclick="startPack()">
@@ -258,12 +259,6 @@
       if (tabName === 'mount') {
         loadPartitions();
       }
-    }
-
-    // Toggle custom MD3 switch
-    function toggleCheckbox(id) {
-      const checkbox = document.getElementById(id);
-      checkbox.checked = !checkbox.checked;
     }
 
     // Show Snackbar
@@ -327,6 +322,7 @@
         return;
       }
 
+      let erofsMissing = false;
       Object.keys(diag).forEach(toolName => {
         const tool = diag[toolName];
         const item = document.createElement("div");
@@ -345,10 +341,19 @@
         badge.className = `badge ${tool.installed ? 'badge-success' : 'badge-warning'}`;
         badge.innerText = tool.installed ? 'Instalado' : 'Falta';
         
+        if (!tool.installed && (toolName === 'fsck.erofs' || toolName === 'mkfs.erofs')) {
+          erofsMissing = true;
+        }
+
         item.appendChild(nameDiv);
         item.appendChild(badge);
         container.appendChild(item);
       });
+
+      const installBtn = document.getElementById("btn-install-erofs");
+      if (installBtn) {
+        installBtn.style.display = erofsMissing ? 'block' : 'none';
+      }
     }
 
     // Actualizar el estado de dispositivos de loop
@@ -395,12 +400,12 @@
     function updateJobUI(jobData) {
       let consoleId, termCardId, badgeId, spinnerId;
       
-      if (jobData.job === 'dumper') {
+      if (jobData.job === 'dumper' || jobData.job === 'install_erofs') {
         consoleId = 'unpack-console';
         termCardId = 'terminal-unpack';
         badgeId = 'unpack-badge';
         spinnerId = 'unpack-status-indicator';
-      } else if (jobData.job === 'mount' || jobData.job === 'unmount') {
+      } else if (jobData.job === 'mount' || jobData.job === 'unmount' || jobData.job === 'extract' || jobData.job === 'repack') {
         consoleId = 'mount-console';
         termCardId = 'terminal-mount';
         badgeId = 'mount-badge';
@@ -494,18 +499,6 @@
         return;
       }
       
-      // Intentamos leer metadata.json de la carpeta de salida
-      // Para ello, la API status.py también nos devuelve el estado de montaje actual.
-      // Pero para leer metadata.json directamente, podemos usar fetch si está en la carpeta web,
-      // o consultar si status.py lo hace. Como metadata.json está dentro de outputDir que puede estar
-      // fuera del directorio del servidor, crearemos un endpoint o usaremos status.py.
-      // Espera, leamos metadata.json. ¿Cómo lo lee el frontend?
-      // Podemos leerlo consultando status.py o creando un endpoint específico,
-      // o haciendo un fetch simple si el servidor lo expone. Como output_dir no está dentro del directorio
-      // raíz del servidor web obligatoriamente, el frontend no puede hacer un fetch local directo.
-      // ¡Crearemos un endpoint cgi para leer el archivo metadata.json!
-      // Es una solución excelente. De momento, haremos un fetch a '/cgi-bin/read_metadata.py?output_dir=' + encodeURIComponent(outputDir)
-      
       fetch(`/cgi-bin/read_metadata.py?output_dir=${encodeURIComponent(outputDir)}`)
         .then(res => {
           if (!res.ok) throw new Error("No se pudo leer metadatos");
@@ -529,70 +522,244 @@
           data.partitions.forEach(part => {
             const row = document.createElement("div");
             row.className = "partition-row";
+            row.style.flexDirection = "column";
+            row.style.alignItems = "stretch";
+            row.style.gap = "8px";
+            row.style.padding = "16px";
             
             const sizeMB = (parseInt(part.size) / (1024 * 1024)).toFixed(2) + " MB";
+            
+            // Fila superior: Info principal y Badges
+            const topRow = document.createElement("div");
+            topRow.style.display = "flex";
+            topRow.style.justifyContent = "space-between";
+            topRow.style.alignItems = "center";
+            topRow.style.flexWrap = "wrap";
+            topRow.style.gap = "8px";
             
             const info = document.createElement("div");
             info.className = "partition-info";
             info.innerHTML = `
-              <span class="partition-name">${part.name}</span>
-              <span class="partition-group">Grupo: ${part.group_name}</span>
+              <span class="partition-name" style="font-size:16px; font-weight:600;">${part.name}</span>
+              <span class="partition-group" style="margin-left:8px; font-size:12px;">Grupo: ${part.group_name}</span>
             `;
             
-            const size = document.createElement("span");
-            size.className = "partition-size";
-            size.innerText = sizeMB;
+            const badgesContainer = document.createElement("div");
+            badgesContainer.style.display = "flex";
+            badgesContainer.style.alignItems = "center";
+            badgesContainer.style.gap = "8px";
             
-            // Verificar si la partición está actualmente montada
+            // Badge de sistema de archivos
+            if (part.img_exists) {
+              const fsBadge = document.createElement("span");
+              fsBadge.className = "badge";
+              fsBadge.style.backgroundColor = "var(--md-sys-color-secondary-container)";
+              fsBadge.style.color = "var(--md-sys-color-on-secondary-container)";
+              fsBadge.style.fontSize = "11px";
+              fsBadge.innerText = (part.fs_type || "desconocido").toUpperCase();
+              badgesContainer.appendChild(fsBadge);
+            }
+            
+            // Badge de tamaño
+            const sizeBadge = document.createElement("span");
+            sizeBadge.className = "partition-size";
+            sizeBadge.innerText = sizeMB;
+            badgesContainer.appendChild(sizeBadge);
+            
+            // Badge de montaje
             const isMounted = data.mounted_list && data.mounted_list.some(m => m.endsWith(`/${part.name}`));
+            const mountBadge = document.createElement("span");
+            mountBadge.className = `status-badge ${isMounted ? 'status-mounted' : 'status-unmounted'}`;
+            mountBadge.innerText = isMounted ? 'Montada' : 'Sin montar';
+            badgesContainer.appendChild(mountBadge);
             
-            const badge = document.createElement("span");
-            badge.className = `status-badge ${isMounted ? 'status-mounted' : 'status-unmounted'}`;
-            badge.innerText = isMounted ? 'Montada' : 'Sin montar';
+            // Badge de extracción (solo para EROFS)
+            if (part.img_exists && part.fs_type === 'erofs') {
+              const extBadge = document.createElement("span");
+              extBadge.className = `status-badge ${part.is_extracted ? 'status-extracted' : 'status-not-extracted'}`;
+              extBadge.innerText = part.is_extracted ? 'Extraída (RW)' : 'Sin extraer';
+              badgesContainer.appendChild(extBadge);
+            }
             
-            // Botones de acción individual
-            const actions = document.createElement("div");
-            actions.style.display = "flex";
-            actions.style.alignItems = "center";
-            actions.style.gap = "12px";
+            topRow.appendChild(info);
+            topRow.appendChild(badgesContainer);
             
-            const btn = document.createElement("button");
-            btn.className = "btn";
-            btn.style.height = "32px";
-            btn.style.padding = "0 12px";
-            btn.style.fontSize = "12px";
-            btn.style.borderRadius = "8px";
+            // Fila inferior: Acciones y rutas
+            const bottomRow = document.createElement("div");
+            bottomRow.style.display = "flex";
+            bottomRow.style.justifyContent = "space-between";
+            bottomRow.style.alignItems = "center";
+            bottomRow.style.marginTop = "4px";
+            bottomRow.style.flexWrap = "wrap";
+            bottomRow.style.gap = "12px";
+            
+            const pathsInfo = document.createElement("div");
+            pathsInfo.style.display = "flex";
+            pathsInfo.style.flexDirection = "column";
+            pathsInfo.style.gap = "2px";
             
             if (isMounted) {
-              btn.className += " btn-error";
-              btn.innerText = "Desmontar";
-              btn.onclick = () => triggerMountAction('unmount', part.name);
-              
               const pathSpan = document.createElement("span");
               pathSpan.style.fontSize = "12px";
               pathSpan.style.color = "var(--md-sys-color-primary)";
-              pathSpan.innerText = `Ruta: ${mountDir}/${part.name}`;
-              
-              actions.appendChild(btn);
-              actions.appendChild(pathSpan);
-            } else {
-              btn.className += " btn-tonal";
-              btn.innerText = "Montar";
-              btn.onclick = () => triggerMountAction('mount', part.name);
-              
-              actions.appendChild(btn);
+              pathSpan.innerHTML = `📍 Montado en: <code>${mountDir}/${part.name}</code>`;
+              pathsInfo.appendChild(pathSpan);
             }
             
-            row.appendChild(info);
-            row.appendChild(size);
-            row.appendChild(badge);
-            row.appendChild(actions);
+            if (part.is_extracted) {
+              const extractSpan = document.createElement("span");
+              extractSpan.style.fontSize = "12px";
+              extractSpan.style.color = "#7cd4ff";
+              extractSpan.innerHTML = `📂 Carpeta: <code>output/${part.name}_extracted/</code>`;
+              pathsInfo.appendChild(extractSpan);
+            }
+            
+            const actions = document.createElement("div");
+            actions.style.display = "flex";
+            actions.style.gap = "8px";
+            
+            if (part.img_exists) {
+              // Botón de montaje/desmontaje
+              const mntBtn = document.createElement("button");
+              mntBtn.className = "btn " + (isMounted ? "btn-error" : "btn-tonal");
+              mntBtn.style.height = "32px";
+              mntBtn.style.padding = "0 12px";
+              mntBtn.style.fontSize = "12px";
+              mntBtn.innerText = isMounted ? "Desmontar" : "Montar";
+              mntBtn.onclick = () => triggerMountAction(isMounted ? 'unmount' : 'mount', part.name);
+              actions.appendChild(mntBtn);
+              
+              // Acciones de EROFS
+              if (part.fs_type === 'erofs') {
+                if (!part.is_extracted) {
+                  const extBtn = document.createElement("button");
+                  extBtn.className = "btn btn-outlined";
+                  extBtn.style.height = "32px";
+                  extBtn.style.padding = "0 12px";
+                  extBtn.style.fontSize = "12px";
+                  extBtn.innerText = "Extraer (RW)";
+                  extBtn.onclick = () => triggerExtractRepackAction('extract', part.name);
+                  actions.appendChild(extBtn);
+                } else {
+                  // Guardar cambios / Reconstruir
+                  const repBtn = document.createElement("button");
+                  repBtn.className = "btn btn-primary";
+                  repBtn.style.height = "32px";
+                  repBtn.style.padding = "0 12px";
+                  repBtn.style.fontSize = "12px";
+                  repBtn.innerText = "Guardar Cambios";
+                  repBtn.onclick = () => triggerExtractRepackAction('repack', part.name);
+                  actions.appendChild(repBtn);
+                  
+                  // Re-extraer
+                  const reExtBtn = document.createElement("button");
+                  reExtBtn.className = "btn btn-outlined";
+                  reExtBtn.style.height = "32px";
+                  reExtBtn.style.padding = "0 12px";
+                  reExtBtn.style.fontSize = "12px";
+                  reExtBtn.innerText = "Re-extraer";
+                  reExtBtn.onclick = () => {
+                    if (confirm(`¿Estás seguro de re-extraer '${part.name}'? Esto sobrescribirá cualquier cambio no guardado en la carpeta de origen.`)) {
+                      triggerExtractRepackAction('extract', part.name);
+                    }
+                  };
+                  actions.appendChild(reExtBtn);
+                }
+              }
+            } else {
+              const noImgSpan = document.createElement("span");
+              noImgSpan.style.fontSize = "12px";
+              noImgSpan.style.color = "rgba(230,225,229,0.3)";
+              noImgSpan.innerText = "Slot inactivo";
+              actions.appendChild(noImgSpan);
+            }
+            
+            bottomRow.appendChild(pathsInfo);
+            bottomRow.appendChild(actions);
+            
+            row.appendChild(topRow);
+            row.appendChild(bottomRow);
             container.appendChild(row);
           });
         })
         .catch(err => {
           container.innerHTML = `<p style="color:var(--md-sys-color-on-surface-variant)">No hay información disponible. Realiza la descompresión primero.</p>`;
         });
+    }
+
+    // Iniciar instalación de herramientas EROFS
+    function installErofsTools() {
+      disableAllButtons();
+      const installBtn = document.getElementById("btn-install-erofs");
+      if (installBtn) installBtn.disabled = true;
+      
+      document.getElementById("terminal-unpack").style.display = 'flex';
+      document.getElementById("unpack-console").innerText = "Iniciando instalación de erofs-utils...";
+      
+      const formData = new URLSearchParams();
+      formData.append('action', 'install_erofs');
+      
+      fetch('/cgi-bin/extract_repack_api.py', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          showSnackbar("Instalación de erofs-utils iniciada. Siguiendo salida...");
+          activeJob = 'install_erofs';
+          switchTab('unpack');
+        } else {
+          showSnackbar(data.message, true);
+          enableAllButtons();
+          if (installBtn) installBtn.disabled = false;
+        }
+      })
+      .catch(err => {
+        showSnackbar("Error de red al iniciar instalación.", true);
+        enableAllButtons();
+        if (installBtn) installBtn.disabled = false;
+      });
+    }
+
+    // Iniciar operación de extracción o reempaquetado de partición
+    function triggerExtractRepackAction(action, partitionName) {
+      const outputDir = document.getElementById("mount-output-dir").value;
+      if (!outputDir || !partitionName) {
+        showSnackbar("Faltan parámetros requeridos.", true);
+        return;
+      }
+      
+      disableAllButtons();
+      document.getElementById("terminal-mount").style.display = 'flex';
+      const verb = action === 'extract' ? 'Extracción' : 'Reempaquetado';
+      document.getElementById("mount-console").innerText = `Iniciando proceso de ${verb} para '${partitionName}'...`;
+      
+      const formData = new URLSearchParams();
+      formData.append('action', action);
+      formData.append('output_dir', outputDir);
+      formData.append('partition', partitionName);
+      
+      fetch('/cgi-bin/extract_repack_api.py', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          showSnackbar(`Proceso de ${action} para ${partitionName} iniciado.`);
+          activeJob = action;
+        } else {
+          showSnackbar(data.message, true);
+          enableAllButtons();
+        }
+      })
+      .catch(err => {
+        showSnackbar("Error de red al procesar la operación.", true);
+        enableAllButtons();
+      });
     }
 
     // Montar o desmontar todo o una partición específica

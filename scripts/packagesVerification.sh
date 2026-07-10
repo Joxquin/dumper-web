@@ -13,5 +13,7 @@ echo -n "\"simg2img\":"$(check_cmd simg2img)","
 echo -n "\"img2simg\":"$(check_cmd img2simg)","
 echo -n "\"lpunpack\":"$(check_cmd lpunpack)","
 echo -n "\"lpmake\":"$(check_cmd lpmake)","
-echo -n "\"lpdump\":"$(check_cmd lpdump)
+echo -n "\"lpdump\":"$(check_cmd lpdump)","
+echo -n "\"fsck.erofs\":"$(check_cmd fsck.erofs)","
+echo -n "\"mkfs.erofs\":"$(check_cmd mkfs.erofs)
 echo -n "}"

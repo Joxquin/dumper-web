@@ -30,6 +30,23 @@ if not os.path.exists(metadata_json):
     print(json.dumps({"error": f"No se encuentra metadata.json en {output_dir}"}))
     sys.exit(0)
 
+def detect_fs_type(img_path):
+    if not os.path.exists(img_path) or os.path.getsize(img_path) < 2048:
+        return "none"
+    try:
+        with open(img_path, 'rb') as f:
+            f.seek(1024)
+            sb = f.read(100)
+            if len(sb) >= 4 and sb[0:4] == b'\xe2\xe1\xf5\xe0':
+                return "erofs"
+            if len(sb) >= 58 and sb[56:58] == b'\x53\xef':
+                return "ext4"
+            if len(sb) >= 4 and sb[0:4] == b'\x10\x20\xf5\xf2':
+                return "f2fs"
+    except Exception:
+        pass
+    return "unknown"
+
 try:
     with open(metadata_json) as f:
         data = json.load(f)
@@ -49,8 +66,20 @@ try:
 except Exception:
     pass
 
+# Enriquecer las particiones con estado de imagen y extracción
+partitions = data.get("partitions", [])
+for part in partitions:
+    name = part.get("name")
+    img_path = os.path.join(output_dir, f"{name}.img")
+    extracted_dir = os.path.join(output_dir, f"{name}_extracted")
+    
+    part["img_exists"] = os.path.exists(img_path)
+    part["is_extracted"] = os.path.isdir(extracted_dir)
+    part["extracted_path"] = extracted_dir if part["is_extracted"] else ""
+    part["fs_type"] = detect_fs_type(img_path) if part["img_exists"] else "none"
+
 response = {
-    "partitions": data.get("partitions", []),
+    "partitions": partitions,
     "groups": data.get("groups", []),
     "mounted_list": mounted_list
 }
